@@ -1,0 +1,82 @@
+name: Nanopi_R1s_H5_lede
+
+on: [push]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v1
+    - name: repo install
+      run: |
+        git clone https://github.com/friendlyarm/repo
+        sudo cp repo/repo /usr/bin/
+        echo "环境检查===="
+        pwd
+        echo "===="
+        du -sh
+        echo "===="
+        df -h
+        echo "===="
+        free -h
+        echo "===="
+        cat /proc/cpuinfo | grep CPU
+        echo "====bye"
+        
+    - name: rsync h5 code
+      run: |
+        mkdir friendlywrt-h5
+        cd friendlywrt-h5
+        repo init -u https://github.com/friendlyarm/friendlywrt_manifests -b master-v18.06.1 -m h5.xml --repo-url=https://github.com/friendlyarm/repo  --no-clone-bundle
+        repo sync -c  --no-clone-bundle
+        pwd
+        du -sh
+        
+    - name: install build base
+      run: |
+        wget -O - https://raw.githubusercontent.com/friendlyarm/build-env-on-ubuntu-bionic/master/install.sh | bash
+        sudo -E apt-get -y install build-essential asciidoc binutils bzip2 gawk gettext git libncurses5-dev libz-dev patch unzip zlib1g-dev lib32gcc1 libc6-dev-i386 subversion flex uglifyjs git-core gcc-multilib p7zip p7zip-full msmtp libssl-dev texinfo libglib2.0-dev xmlto qemu-utils upx libelf-dev autoconf automake libtool autopoint device-tree-compiler
+        pwd
+        du -sh
+        
+    - name : git pull lede
+      run: |
+        git clone https://github.com/coolsnowwolf/lede
+        pwd
+        du -sh
+        
+    - name : merge code
+      run: |
+        rm -rf ./friendlywrt-h5/friendlywrt/feeds.conf.default
+        cp -r ./lede/feeds.conf.default ./friendlywrt-h5/friendlywrt/feeds.conf.default
+        cp -r lede/package/lean friendlywrt-h5/friendlywrt/package/lean
+        ls friendlywrt-h5/friendlywrt/package/lean
+        
+    - name: Update feeds
+      run: |
+        pwd
+        id
+        ls
+        cd friendlywrt-h5/friendlywrt/
+        ./scripts/feeds update -a
+        ./scripts/feeds install -a
+        
+    - name: make config
+      run: |
+        cd friendlywrt-h5/
+        rm -rf .config
+        wget https://raw.githubusercontent.com/MSG-maniac/Nanopi_R1s_H5_lean/master/.config
+        sed -i 's/make -j$(nproc) V=s/make -j1 V=s/g' scripts/mk-friendlywrt.sh
+        cat scripts/mk-friendlywrt.sh
+        
+    - name: building
+      run: |
+        cd friendlywrt-h5
+        ./build.sh nanopi_r1s.mk
+    - name: Upload artifact
+      uses: actions/upload-artifact@master
+      with:
+        name: lede_NanoPi_R1s_h5
+        path: ./friendlywrt-h5/out
